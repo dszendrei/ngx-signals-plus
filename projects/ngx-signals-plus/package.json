@@ -1,0 +1,24 @@
+{
+  "name": "ngx-signals-plus",
+  "version": "0.1.0",
+  "description": "Additional Signals to improve developer experience.",
+  "author": "Daniel Szendrei",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dszendrei/ngx-signals-plus"
+  },
+  "license": "MIT",
+  "keywords": [
+    "angular",
+    "signals",
+    "typescript"
+  ],
+  "peerDependencies": {
+    "@angular/common": "^17.3.0",
+    "@angular/core": "^17.3.0"
+  },
+  "dependencies": {
+    "tslib": "^2.3.0"
+  },
+  "sideEffects": false
+}
