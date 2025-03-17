@@ -5,7 +5,7 @@ import { bindable } from './bindable-signal';
 
 describe('bindable-signal.ts', () => {
   describe('bindable', () => {
-    it('should update the bindable signal if the updater observable has been emitted', fakeAsync(() => {
+    it('should update the bindable signal if the updater observable has been emitted', () => {
       const newValue = 'newValue';
       const updaterSource = new BehaviorSubject(newValue);
       const bindableSignal = TestBed.runInInjectionContext(() =>
@@ -13,16 +13,14 @@ describe('bindable-signal.ts', () => {
       );
 
       bindableSignal.bindTo(updaterSource);
-      tick();
 
       expect(bindableSignal()).toBe(newValue);
 
       const anotherValue = 'anotherValue';
       updaterSource.next(anotherValue);
-      tick();
 
       expect(bindableSignal()).toBe(anotherValue);
-    }));
+    });
 
     it('should update the bindable signal if the updater signal has been emitted', fakeAsync(() => {
       const newValue = 'newValue';
@@ -111,7 +109,7 @@ describe('bindable-signal.ts', () => {
       expect(bindableSignal()).toBe(newValue);
     }));
 
-    it('should stop updating the bindable signal from an observable if the DestroyRef onDestroy callback was called', fakeAsync(() => {
+    it('should stop updating the bindable signal from an observable if the DestroyRef onDestroy callback was called', () => {
       const destroyRef = TestBed.inject(DestroyRef);
       const onDestroyHooks: (() => void)[] = [];
       collectMockDestroyRefCallbacks(destroyRef, onDestroyHooks);
@@ -120,19 +118,17 @@ describe('bindable-signal.ts', () => {
       const bindableSignal = bindable('initialValue', { destroyRef });
 
       bindableSignal.bindTo(updaterSource);
-      tick();
 
       expect(bindableSignal()).toBe(newValue);
 
       onDestroyHooks.forEach((destroy) => destroy());
       const anotherValue = 'anotherValue';
       updaterSource.next(anotherValue);
-      tick();
 
       expect(bindableSignal()).toBe(newValue);
-    }));
+    });
 
-    it('should stop updating the bindable signal from an observable if the injected DestroyRef onDestroy callback was called', fakeAsync(() => {
+    it('should stop updating the bindable signal from an observable if the injected DestroyRef onDestroy callback was called', () => {
       const injector = TestBed.inject(Injector);
       const destroyRef = TestBed.inject(DestroyRef);
       spyOn(injector, 'get').and.returnValue(destroyRef);
@@ -143,34 +139,30 @@ describe('bindable-signal.ts', () => {
       const bindableSignal = bindable('initialValue', { injector });
 
       bindableSignal.bindTo(updaterSource);
-      tick();
 
       expect(bindableSignal()).toBe(newValue);
 
       onDestroyHooks.forEach((destroy) => destroy());
       const anotherValue = 'anotherValue';
       updaterSource.next(anotherValue);
-      tick();
 
       expect(bindableSignal()).toBe(newValue);
-    }));
+    });
 
-    it('should stop updating the bindable signal from an observable if the observable was terminated', fakeAsync(() => {
+    it('should stop updating the bindable signal from an observable if the observable was terminated', () => {
       const newValue = 'newValue';
       const updaterSource = new BehaviorSubject(newValue);
       const bindableSignal = bindable('initialValue', { manualCleanup: true });
 
       bindableSignal.bindTo(updaterSource.pipe(take(1)));
-      tick();
 
       expect(bindableSignal()).toBe(newValue);
 
       const anotherValue = 'anotherValue';
       updaterSource.next(anotherValue);
-      tick();
 
       expect(bindableSignal()).toBe(newValue);
-    }));
+    });
 
     it('should stop updating the bindable signal from a signal if the injected DestroyRef onDestroy callback was called', fakeAsync(() => {
       const injector = TestBed.inject(Injector);
@@ -194,7 +186,7 @@ describe('bindable-signal.ts', () => {
       expect(bindableSignal()).toBe(newValue);
     }));
 
-    it('should stop updating the bindable signal from an observable if unbind() was called', fakeAsync(() => {
+    it('should stop updating the bindable signal from an observable if unbind() was called', () => {
       const newValue = 'newValue';
       const updaterSource = new BehaviorSubject(newValue);
       const bindableSignal = TestBed.runInInjectionContext(() =>
@@ -202,17 +194,15 @@ describe('bindable-signal.ts', () => {
       );
 
       bindableSignal.bindTo(updaterSource);
-      tick();
 
       expect(bindableSignal()).toBe(newValue);
 
       bindableSignal.unbind();
       const anotherValue = 'anotherValue';
       updaterSource.next(anotherValue);
-      tick();
 
       expect(bindableSignal()).toBe(newValue);
-    }));
+    });
 
     it('should stop updating the bindable signal from a signal if unbind() was called', fakeAsync(() => {
       const newValue = 'newValue';
@@ -242,7 +232,7 @@ describe('bindable-signal.ts', () => {
       expect(() => bindableSignal.unbind()).toThrow();
     });
 
-    it('should only update from the latest bound observable', fakeAsync(() => {
+    it('should only update from the latest bound observable', () => {
       const newValue = 'newValue';
       const updaterSource = new BehaviorSubject(newValue);
       const bindableSignal = TestBed.runInInjectionContext(() =>
@@ -250,7 +240,6 @@ describe('bindable-signal.ts', () => {
       );
 
       bindableSignal.bindTo(updaterSource);
-      tick();
 
       expect(bindableSignal()).toBe(newValue);
 
@@ -259,21 +248,18 @@ describe('bindable-signal.ts', () => {
       const newAnotherValue = 'newAnotherValue';
       const newUpdaterSource = new BehaviorSubject(newAnotherValue);
       bindableSignal.bindTo(newUpdaterSource);
-      tick();
 
       expect(bindableSignal()).toBe(newAnotherValue);
 
       updaterSource.next(anotherValue);
-      tick();
 
       expect(bindableSignal()).toBe(newAnotherValue);
 
       const latestValue = 'latestValue';
       newUpdaterSource.next(latestValue);
-      tick();
 
       expect(bindableSignal()).toBe(latestValue);
-    }));
+    });
 
     it('should only update from the latest bound signal', fakeAsync(() => {
       const newValue = 'newValue';
@@ -316,7 +302,6 @@ describe('bindable-signal.ts', () => {
       );
 
       bindableSignal.bindTo(updaterSource);
-      tick();
 
       expect(bindableSignal()).toBe(newValue);
 
@@ -352,54 +337,47 @@ describe('bindable-signal.ts', () => {
       const newAnotherValue = 'newAnotherValue';
       const newUpdaterSource = new BehaviorSubject(newAnotherValue);
       bindableSignal.bindTo(newUpdaterSource);
-      tick();
 
       expect(bindableSignal()).toBe(newAnotherValue);
 
       updaterSignal.set(anotherValue);
-      tick();
 
       expect(bindableSignal()).toBe(newAnotherValue);
     }));
 
-    it('should not throw if unbind() was called on a terminated observable source', fakeAsync(() => {
+    it('should not throw if unbind() was called on a terminated observable source', () => {
       const newValue = 'newValue';
       const updaterSource = new BehaviorSubject(newValue);
       const destroySource = new Subject<void>();
       const bindableSignal = bindable('initialValue', { manualCleanup: true });
 
       bindableSignal.bindTo(updaterSource.pipe(takeUntil(destroySource)));
-      tick();
 
       expect(bindableSignal()).toBe(newValue);
 
       destroySource.next();
-      tick();
 
       bindableSignal.unbind();
 
       expect(bindableSignal).toBeTruthy();
-    }));
+    });
 
-    it('should not throw if the source observable termination was called after unbind()', fakeAsync(() => {
+    it('should not throw if the source observable termination was called after unbind()', () => {
       const newValue = 'newValue';
       const updaterSource = new BehaviorSubject(newValue);
       const destroySource = new Subject<void>();
       const bindableSignal = bindable('initialValue', { manualCleanup: true });
 
       bindableSignal.bindTo(updaterSource.pipe(takeUntil(destroySource)));
-      tick();
 
       expect(bindableSignal()).toBe(newValue);
 
       bindableSignal.unbind();
-      tick();
 
       destroySource.next();
-      tick();
 
       expect(bindableSignal).toBeTruthy();
-    }));
+    });
   });
 });
 

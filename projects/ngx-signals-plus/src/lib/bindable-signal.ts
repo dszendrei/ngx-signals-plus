@@ -12,14 +12,7 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import {
-  MonoTypeOperatorFunction,
-  Observable,
-  Subscription,
-  asapScheduler,
-  observeOn,
-  pipe,
-} from 'rxjs';
+import { MonoTypeOperatorFunction, Observable, Subscription, pipe } from 'rxjs';
 
 export type BindableSignal<T> = WritableSignal<T> & {
   bindTo: (source: Observable<T> | Signal<T>) => WritableSignal<T>;
@@ -119,13 +112,7 @@ export function bindable<T>(
       }
 
       subscription = source
-        .pipe(
-          // Writing to signals is not allowed in a `computed` or an `effect` by default so we need to use the
-          // asapScheduler to ensure that the value is set in the next microtask. This will cause the returned
-          // signal to have the initial value first before we have an update from the observable.
-          observeOn(asapScheduler),
-          operatorFunction
-        )
+        .pipe(operatorFunction)
         .subscribe((value) => bindableSignal.set(value));
     }
     bound = true;
