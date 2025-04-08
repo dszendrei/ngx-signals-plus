@@ -3,3 +3,4 @@
  */
 
 export * from './lib/bindable-signal';
+export * from './lib/event-signal';

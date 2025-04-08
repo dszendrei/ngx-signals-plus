@@ -31,3 +31,87 @@ export class LoaderComponent implements OnInit {
   }
 }
 ```
+
+### EventSignal & signalFromEvent:
+
+EventSignal is a special type of signal that comes with two additional methods: attachActivator and deactivate. It’s also the return type of signalFromEvent, a function inspired by the popular fromEvent function in NgRx. However, signalFromEvent goes beyond the basics, offering enhanced functionality and returning a signal. Here are some of its standout features:
+
+- Signal-based Targets: Perfect for scenarios using viewChild(), it dynamically adds or removes event listeners based on the truthiness of the target signal.
+- Dynamic Event Names: Supports signal-based event names or collections of event names, allowing for the flexible addition and removal of listeners for multiple event types.
+- Efficient Deactivation: Event listeners can be deactivated and reactivated with a boolean, a Signal<boolean>, or an Observable<boolean>. Deactivation also removes the event listener, making it more performance-friendly than simply using the filter operator, which blocks emissions but keeps the event listener active.
+
+To demonstrate its functionality, imagine implementing a signal<{ x: number, y: number }> to update the transform property of a child element based on the mouse's position while dragging it. For a more detailed walkthrough, check out this **[article](https://medium.com/p/8138c57353d6)** on Medium.
+
+```ts
+type EventTypes = "mousedown" | "mousemove" | "mouseup";
+
+@Component({
+  selector: "app-child",
+  standalone: true,
+  imports: [],
+  template: "<p>Text is now draggable!</p>",
+})
+export class ChildComponent {}
+
+@Component({
+  selector: "app-root",
+  standalone: true,
+  imports: [ChildComponent],
+  template: `
+    <h1>Hello, Event Signal Fan Club</h1>
+    @if (enableViewChild()) {
+    <div>
+      <app-child [style]="dragCoordinates()"></app-child>
+    </div>
+    }
+  `,
+})
+export class AppComponent implements OnInit {
+  enableViewChild = signal(false);
+
+  viewChildSignal = viewChild(ChildComponent, {
+    read: ElementRef<ChildComponent>,
+  });
+  private readonly activator = signal(false);
+
+  private readonly currentlyListenedType = signal<EventTypes | EventTypes[]>("mousedown");
+
+  private readonly dragSignal = signalFromEvent<MouseEvent, { x: number; y: number }>(this.currentlyListenedType, {
+    target: this.viewChildSignal,
+    tap: (event) => {
+      if (event.type === "mousedown") {
+        this.currentlyListenedType.set(["mousemove", "mouseup"]);
+      } else if (event.type === "mouseup") {
+        this.enableViewChild.set(false);
+        this.currentlyListenedType.set("mousedown");
+      }
+    },
+    resultSelector: (event) => {
+      return {
+        x: event?.pageX ?? 80,
+        y: event?.pageY ?? 100,
+      };
+    },
+    initialValue: { x: 80, y: 100 },
+  });
+
+  readonly dragCoordinates = computed(() => {
+    return `transform: translate(${this.dragSignal().x - 30}px, ${this.dragSignal().y - 30}px)`;
+  });
+
+  constructor() {
+    this.dragSignal.attachActivator(this.activator);
+
+    signalFromEvent("click", {
+      activate: true,
+      tap: () => {
+        this.enableViewChild.set(true);
+      },
+    });
+  }
+
+  ngOnInit(): void {
+    this.activator.set(true);
+  }
+}
+```
