@@ -10,6 +10,7 @@ import {
   inject,
   isSignal,
   signal,
+  untracked,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MonoTypeOperatorFunction, Observable, Subscription, pipe } from 'rxjs';
@@ -92,10 +93,16 @@ export function bindable<T>(
         );
       }
 
-      effectRef = effect(() => bindableSignal.set(source()), {
-        injector,
-        allowSignalWrites: true,
-      });
+      effectRef = effect(
+        () => {
+          const sourceValue = source();
+          untracked(() => bindableSignal.set(sourceValue));
+        },
+        {
+          injector,
+          allowSignalWrites: true,
+        }
+      );
     } else {
       let operatorFunction: MonoTypeOperatorFunction<T>;
       if (options?.manualCleanup === true) {
