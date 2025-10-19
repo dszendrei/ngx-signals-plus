@@ -115,3 +115,15 @@ export class AppComponent implements OnInit {
   }
 }
 ```
+
+### toBehaviorObservable:
+
+This implementation closely resembles the original toObservable() but introduces a few key differences:
+
+- Always up-to-date initial value: The initial value is provided by a custom operator called lazyStartWith, which evaluates the signal at subscription time. This guarantees that the emitted value is the latest signal state, even if the signal was updated just before subscribing.
+- Effect created on subscription: The Angular effect that tracks signal changes is only created when the observable is subscribed to. This avoids premature signal access, unnecessary effect binding and updates.
+- Hot observable via shareReplay: To avoid creating a new effect for every subscriber, and to ensure consistent initial value delivery, the observable is transformed into a hot stream using shareReplay({ bufferSize: 1, refCount: true }).
+
+Together, these changes make the implementation behave very similarly to a BehaviorSubject: it always has a current value, emits it synchronously on subscription, and continues to emit updates reactively. Hence the name: toBehaviorObservable.
+
+Use toBehaviorObservable() exactly as you would use toObservable(), but with the added benefit of having the latest initial value.
