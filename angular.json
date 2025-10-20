@@ -6,7 +6,7 @@
     "ngx-signals-plus": {
       "projectType": "library",
       "root": "projects/ngx-signals-plus",
-      "sourceRoot": "projects/ngx-signals-plus/src",
+      "sourceRoot": "projects/ngx-signals-plus",
       "prefix": "lib",
       "architect": {
         "build": {

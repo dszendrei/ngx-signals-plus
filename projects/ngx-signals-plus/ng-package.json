@@ -3,5 +3,6 @@
   "dest": "../../dist/ngx-signals-plus",
   "lib": {
     "entryFile": "src/public-api.ts"
-  }
+  },
+  "allowedNonPeerDependencies": ["tslib"]
 }

@@ -1,6 +1,6 @@
 {
   "name": "ngx-signals-plus",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Additional Signals to improve developer experience.",
   "author": "Daniel Szendrei",
   "repository": {
@@ -15,13 +15,17 @@
   ],
   "peerDependencies": {
     "@angular/common": ">=17.3.0",
-    "@angular/core": ">=17.3.0"
+    "@angular/core": ">=17.3.0",
+    "@ngrx/signals": ">=18.1.1"
   },
   "peerDependenciesMeta": {
     "@angular/common": {
       "optional": true
     },
     "@angular/core": {
+      "optional": true
+    },
+    "@ngrx/signals": {
       "optional": true
     }
   },
