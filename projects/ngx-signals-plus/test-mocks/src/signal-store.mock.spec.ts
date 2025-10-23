@@ -1,4 +1,10 @@
-import { computed, signal } from '@angular/core';
+import {
+  computed,
+  inject,
+  Injectable,
+  InjectionToken,
+  signal,
+} from '@angular/core';
 import {
   deepComputed,
   signalStore,
@@ -13,6 +19,26 @@ import {
   MockSignalStore,
   createSignalStoreMock,
 } from './signal-store.mock';
+import { TestBed } from '@angular/core/testing';
+
+const initialInjectedState = {
+  featureString: 'initial',
+  featureNumber: 0,
+};
+
+const INJECTED_STATE = new InjectionToken<{
+  featureString: string;
+  featureNumber: number;
+}>('InjectedState', {
+  factory: () => initialInjectedState,
+});
+
+@Injectable({ providedIn: 'root' })
+class TestService {
+  increment() {
+    //do nothing
+  }
+}
 
 describe('createSignalStoreMock', () => {
   let exampleStore: ReturnType<typeof createSignalStore>;
@@ -23,7 +49,11 @@ describe('createSignalStoreMock', () => {
   });
 
   it('should expose same selector and method keys (minus STATE_SOURCE symbol)', () => {
-    const mock = createSignalStoreMock(exampleStore);
+    const mock = createSignalStoreMock(exampleStore, {
+      providers: [
+        { provide: INJECTED_STATE, useFactory: () => initialInjectedState },
+      ],
+    });
 
     // No unexpected loss of selectors
     expect(mock.count).toBeDefined();
@@ -56,30 +86,36 @@ describe('createSignalStoreMock', () => {
     expect(typeof mock.removeEntity).toBe('function');
   });
 
-  it('should inherit the initial values', () => {
-    const mock = createSignalStoreMock(exampleStore);
-    const storeInstance = new exampleStore();
+  it('should inherit the initial values', (done) => {
+    const mock = createSignalStoreMock(exampleStore, {
+      providers: [INJECTED_STATE],
+    });
+    let storeInstance: InstanceType<typeof exampleStore>;
+    TestBed.runInInjectionContext(() => {
+      storeInstance = new exampleStore();
 
-    expect(mock.count()).toBe(storeInstance.count());
-    expect(mock.status()).toBe(storeInstance.status());
-    expect(mock.nested()).toBe(storeInstance.nested());
-    expect(mock.nested.value()).toBe(storeInstance.nested.value());
-    expect(mock.double()).toBe(storeInstance.double());
-    expect(mock.statusLength()).toBe(storeInstance.statusLength());
+      expect(mock.count()).toBe(storeInstance.count());
+      expect(mock.status()).toBe(storeInstance.status());
+      expect(mock.nested()).toBe(storeInstance.nested());
+      expect(mock.nested.value()).toBe(storeInstance.nested.value());
+      expect(mock.double()).toBe(storeInstance.double());
+      expect(mock.statusLength()).toBe(storeInstance.statusLength());
 
-    // Signal store feature selectors
-    expect(mock.featureString()).toBe(storeInstance.featureString());
-    expect(mock.featureNumber()).toBe(storeInstance.featureNumber());
-    expect(mock.isFeatureStringEmpty()).toBe(
-      storeInstance.isFeatureStringEmpty()
-    );
-    expect(mock.isFeatureNumberPositive()).toBe(
-      storeInstance.isFeatureNumberPositive()
-    );
+      // Signal store feature selectors
+      expect(mock.featureString()).toBe(storeInstance.featureString());
+      expect(mock.featureNumber()).toBe(storeInstance.featureNumber());
+      expect(mock.isFeatureStringEmpty()).toBe(
+        storeInstance.isFeatureStringEmpty()
+      );
+      expect(mock.isFeatureNumberPositive()).toBe(
+        storeInstance.isFeatureNumberPositive()
+      );
 
-    // Entity manager store feature selectors are empty initially
-    expect(mock.entities()).toEqual([]);
-    expect(mock.entityMap()).toEqual({});
+      // Entity manager store feature selectors are empty initially
+      expect(mock.entities()).toEqual([]);
+      expect(mock.entityMap()).toEqual({});
+      done();
+    });
   });
 
   it('should create jest method mocks if jest is available', () => {
@@ -89,7 +125,9 @@ describe('createSignalStoreMock', () => {
           return { _isMockFunction: true };
         },
       };
-      const mock = createSignalStoreMock(exampleStore);
+      const mock = createSignalStoreMock(exampleStore, {
+        providers: [INJECTED_STATE],
+      });
 
       expect((mock.setStatus as any)()._isMockFunction).toBeTrue();
       expect((mock.increment as any)()._isMockFunction).toBeTrue();
@@ -102,7 +140,9 @@ describe('createSignalStoreMock', () => {
 
   // local setup is using jasmine for tests
   it('should create jasmine mocks for non-overridden methods', () => {
-    const mock = createSignalStoreMock(exampleStore);
+    const mock = createSignalStoreMock(exampleStore, {
+      providers: [INJECTED_STATE],
+    });
 
     mock.setStatus('loading');
     expect(mock.setStatus).toHaveBeenCalledWith('loading');
@@ -167,6 +207,7 @@ describe('createSignalStoreMock', () => {
 
     const mock = createSignalStoreMock(exampleStore, {
       overrideSelectors: selectorOverrides,
+      providers: [INJECTED_STATE],
     });
 
     // Identity preserved
@@ -249,6 +290,7 @@ describe('createSignalStoreMock', () => {
         addEntity: addEntityOverride,
         removeEntity: removeEntityOverride,
       },
+      providers: [INJECTED_STATE],
     });
 
     mock.setStatus('loading');
@@ -273,6 +315,7 @@ describe('createSignalStoreMock', () => {
     const countSig = signal(5);
     const mock = createSignalStoreMock(exampleStore, {
       overrideSelectors: { count: countSig },
+      providers: [INJECTED_STATE],
     });
     expect(mock.count()).toBe(5);
     countSig.set(6);
@@ -291,9 +334,11 @@ function createSignalStore() {
       double: computed(() => store.count() * 2),
       statusLength: computed(() => store.status().length),
     })),
-    withMethods(() => ({
+    withMethods((store, testService = inject(TestService)) => ({
       setStatus: (s: 'idle' | 'loading' | 'ready') => {}, // irrelevant since it will be mocked,
-      increment: () => {}, // irrelevant since it will be mocked,
+      increment: () => {
+        testService.increment();
+      }, // irrelevant since it will be mocked,
     })),
     withSignalStoreFeature(),
     withEntityManagerStoreFeature()
@@ -302,10 +347,7 @@ function createSignalStore() {
 
 function withSignalStoreFeature() {
   return signalStoreFeature(
-    withState<{ featureString: string; featureNumber: number }>({
-      featureString: 'initial',
-      featureNumber: 0,
-    }),
+    withState(() => inject(INJECTED_STATE)),
     withComputed(({ featureString, featureNumber }) => ({
       isFeatureStringEmpty: computed(() => featureString().length === 0),
       isFeatureNumberPositive: computed(() => featureNumber() > 0),

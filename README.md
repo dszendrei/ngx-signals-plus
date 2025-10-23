@@ -137,18 +137,20 @@ What it does:
 
 1.  Instantiates the provided store class (storeConstructor).
 2.  Extracts its current plain state via getState.
-3.  Wraps every top-level state property in a signal (signalifiedState).
-4.  Applies selector overrides (overrideSelectors):
+3.  Mocks every inject() calls without the injection context (in case of an injected dependency in the withMethods).
+4.  Wraps every top-level state property in a signal (signalifiedState).
+5.  Applies selector overrides (overrideSelectors):
     - All overridden selector entries are returned the provided signals.
     - So in the tests calling the set method on the provided signal will update the value in the store.
-5.  Creates a deepComputed signal (deepSignal) that unwraps those selector signals to
+6.  Creates a deepComputed signal (deepSignal) that unwraps those selector signals to
     expose a read-only DeepSignal as how the real store would.
     This keeps dependency tracking so updates propagate.
-6.  Attaches method overrides (overrideMethods) as supplied mock instances to mock the withMethods functions.
-7.  Auto-mocks any remaining functions (that are not signals).
+7.  Attaches method overrides (overrideMethods) as supplied mock instances to mock the withMethods functions.
+8.  Auto-mocks any remaining functions (that are not signals).
     - Detects availability of jest.fn() or jasmine.createSpy().
     - If neither is available, creates a stub: (...args: any[]) => {};.
-8.  Returns the composite object typed as MockSignalStore<T> (original instance shape minus STATE_SOURCE).
+9.  Returns the composite object typed as MockSignalStore<T> (original instance shape minus STATE_SOURCE).
+10. Supports additional providers to be injected in the withState factory function in case the withState is resolved with an injected factory function. You can use the InjectionToken directly or a provider with the useFactory.
 
 Why deepComputed?
 
@@ -166,7 +168,7 @@ Typical usage:
 ```ts
 const MyStore = signalStore(
   withState({ status: Status.Initial, error?: { code: number, message: string } }),
-  withMethods(store => ({update: ...}) )
+  withMethods(store => ({update: ...}))
 );
 
 const status = signal(Status.Initial);
@@ -180,4 +182,40 @@ const store = createSignalStoreMock(MyStore, {
 
 status.set(Status.Ready); // mutate
 expect(store.update).toHaveBeenCalled();
+```
+
+If the withState is using an injected factory function:
+
+```ts
+const initialInjectedState = {
+  featureString: 'initial',
+  featureNumber: 0,
+};
+
+const INJECTED_STATE = new InjectionToken<{
+  featureString: string;
+  featureNumber: number;
+}>('InjectedState', {
+  factory: () => initialInjectedState,
+});
+
+const MyStore = signalStore(
+  withState(() => inject(INJECTED_STATE)),
+  ...
+);
+
+// Option A — pass the InjectionToken with the factory function:
+const mockA = createSignalStoreMock(MyStore, {
+  providers: [INJECTED_STATE] // will resolve INJECTED_STATE.ɵprov.factory() during mock creation
+});
+
+// Option B — pass a provider with useFactory (explicit):
+const mockB = createSignalStoreMock(MyStore, {
+  providers: [
+    {
+      provide: INJECTED_STATE,
+      useFactory: () => initialInjectedState, // value used as initial state input
+    },
+  ],
+});
 ```
