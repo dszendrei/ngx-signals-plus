@@ -239,17 +239,14 @@ auto-disables hooks when creating and using the mock store without manually prov
 
 If the `DISABLE_HOOKS` injection token is provided with a truthy value, the hooks will be skipped entirely.
 
-⚠️ **Important Limitation:** Unlike `withHooks`, this feature **only supports the factory function form**.
-Direct hook objects (`{ onInit, onDestroy }`) are **not allowed** and will result in an error.
-
 ```ts
-// ✅ Allowed
 withOptionalHooks((store) => ({
   onInit: () => console.log("Store initialized"),
   onDestroy: () => console.log("Store destroyed"),
 }));
 
-// ❌ Not allowed (not just because of the console.log...)
+// OR
+
 withOptionalHooks({
   onInit: () => console.log("Store initialized"),
   onDestroy: () => console.log("Store destroyed"),

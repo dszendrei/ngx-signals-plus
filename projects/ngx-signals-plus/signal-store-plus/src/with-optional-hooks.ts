@@ -1,9 +1,12 @@
 import { inject, InjectionToken } from '@angular/core';
 import {
   EmptyFeatureResult,
+  Prettify,
   SignalStoreFeature,
   SignalStoreFeatureResult,
+  StateSignals,
   withHooks,
+  WritableStateSource,
 } from '@ngrx/signals';
 
 /**
@@ -23,26 +26,33 @@ import {
  */
 export const DISABLE_HOOKS = new InjectionToken<boolean>('IGNORE_WHEN_MOCKED');
 
+export function withOptionalHooks<
+  Input extends SignalStoreFeatureResult
+>(hooks: {
+  onInit?: HookFn<Input>;
+  onDestroy?: HookFn<Input>;
+}): SignalStoreFeature<Input, EmptyFeatureResult>;
+export function withOptionalHooks<Input extends SignalStoreFeatureResult>(
+  hooks: HooksFactory<Input>
+): SignalStoreFeature<Input, EmptyFeatureResult>;
+
 /**
  * Conditionally applies lifecycle hooks to a SignalStore, allowing them to be disabled via an injection token.
  *
- * This feature behaves like `withHooks`, but adds support for disabling hooks — useful for only running
+ * This feature behaves like `withHooks`, but adds support for disabling hooks, useful for only running
  * the hooks for a certain provider, testing or mocking scenarios. Combined with the `createSignalStoreMock`, it
  * auto-disables hooks when creating and using the mock store without manually providing the `DISABLE_HOOKS` injection token.
  *
  * If the `DISABLE_HOOKS` injection token is provided with a truthy value, the hooks will be skipped entirely.
  *
- * ⚠️ **Important Limitation:** Unlike `withHooks`, this feature **only supports the factory function form**.
- * Direct hook objects (`{ onInit, onDestroy }`) are **not allowed** and will result in a runtime error.
- *
  * @example
- * // ✅ Allowed
  * withOptionalHooks((store) => ({
  *   onInit: () => console.log('Store initialized'),
  *   onDestroy: () => console.log('Store destroyed'),
  * }));
  *
- * // ❌ Not allowed
+ * // OR
+ *
  * withOptionalHooks({
  *   onInit: () => console.log('Store initialized'),
  *   onDestroy: () => console.log('Store destroyed'),
@@ -53,7 +63,12 @@ export const DISABLE_HOOKS = new InjectionToken<boolean>('IGNORE_WHEN_MOCKED');
  * @returns A SignalStoreFeature that conditionally applies hooks based on the injection context.
  */
 export function withOptionalHooks<Input extends SignalStoreFeatureResult>(
-  ...hooks: Parameters<typeof withHooks>
+  hooksOrFactory:
+    | {
+        onInit?: HookFn<Input>;
+        onDestroy?: HookFn<Input>;
+      }
+    | HooksFactory<Input>
 ): SignalStoreFeature<Input, EmptyFeatureResult> {
   return (store) => {
     const disableHooks = inject(DISABLE_HOOKS, {
@@ -64,7 +79,36 @@ export function withOptionalHooks<Input extends SignalStoreFeatureResult>(
       return store;
     }
 
-    const feature = withHooks(...hooks);
+    const feature = withHooks(
+      hooksOrFactory as Parameters<typeof withHooks>[0]
+    );
     return feature(store);
   };
 }
+
+type HooksFactory<
+  Input extends SignalStoreFeatureResult & { props?: any; computed?: any }
+> = (
+  store: Prettify<
+    StateSignals<Input['state']> &
+      Input['props'] &
+      Input['computed'] &
+      Input['methods'] &
+      WritableStateSource<Input['state']>
+  >
+) => {
+  onInit?: () => void;
+  onDestroy?: () => void;
+};
+
+type HookFn<
+  Input extends SignalStoreFeatureResult & { props?: any; computed?: any }
+> = (
+  store: Prettify<
+    StateSignals<Input['state']> &
+      Input['props'] &
+      Input['computed'] &
+      Input['methods'] &
+      WritableStateSource<Prettify<Input['state']>>
+  >
+) => void;

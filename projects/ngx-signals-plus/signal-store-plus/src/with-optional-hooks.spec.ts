@@ -104,6 +104,16 @@ function createSignalStore(...hooks: Parameters<typeof withOptionalHooks>) {
     withOptionalHooks(...hooks),
     withState({
       count: 1,
+    }),
+    withOptionalHooks((store) => ({
+      onInit: () => {
+        store.count(); // HooksFactory
+      },
+    })),
+    withOptionalHooks({
+      onInit: () => {
+        // HookFn
+      },
     })
   );
 }
