@@ -34,7 +34,7 @@ export class LoaderComponent implements OnInit {
 
 ### EventSignal & signalFromEvent:
 
-EventSignal is a special type of signal that comes with two additional methods: attachActivator and deactivate. It’s also the return type of signalFromEvent, a function inspired by the popular fromEvent function in NgRx. However, signalFromEvent goes beyond the basics, offering enhanced functionality and returning a signal. Here are some of its standout features:
+EventSignal is a special type of signal that comes with two additional methods: attachActivator and deactivate. It’s also the return type of signalFromEvent, a function inspired by the popular fromEvent function in RxJs. However, signalFromEvent goes beyond the basics, offering enhanced functionality and returning a signal. Here are some of its standout features:
 
 - Signal-based Targets: Perfect for scenarios using viewChild(), it dynamically adds or removes event listeners based on the truthiness of the target signal.
 - Dynamic Event Names: Supports signal-based event names or collections of event names, allowing for the flexible addition and removal of listeners for multiple event types.
@@ -151,6 +151,8 @@ What it does:
     - If neither is available, creates a stub: (...args: any[]) => {};.
 9.  Returns the composite object typed as MockSignalStore<T> (original instance shape minus STATE_SOURCE).
 10. Supports additional providers to be injected in the withState factory function in case the withState is resolved with an injected factory function. You can use the InjectionToken directly or a provider with the useFactory.
+11. Mocks ApplicationRef to return the mocked Injector so that `withRootGuard` assumes the store is provided in root.
+12. Supports auto-disabling lifecycle hooks when combined with the `withOptionalHooks` feature in the store definition.
 
 Why deepComputed?
 
@@ -163,10 +165,17 @@ Typing details:
 - MockSelectorOverrides<T>: only non-method keys (selectors/state slices). Use `deepComputed` for complex objects.
 - MockMethodOverrides<T>: only method keys, each replaced by a provided jasmine or jest mock.
 
+⚠️ **Important Limitation:**
+When a SignalStore is instantiated, its onInit() lifecycle hook is always executed. This means that using withHooks in Signal Stores during testing can trigger unintended side effects. To avoid this, use withOptionalHooks instead — it behaves the same as withHooks, but will automatically skip lifecycle hooks.
+
 Typical usage:
 
 ```ts
 const MyStore = signalStore(
+  // Optional: lifecycle hooks can be auto-disabled in the mock using withOptionalHooks instead of withHooks
+  withOptionalHooks(() => ({
+    onInit: () => { ... }
+  })),
   withState({ status: Status.Initial, error?: { code: number, message: string } }),
   withMethods(store => ({update: ...}))
 );
@@ -218,4 +227,50 @@ const mockB = createSignalStoreMock(MyStore, {
     },
   ],
 });
+```
+
+### withOptionalHooks:
+
+Conditionally applies lifecycle hooks to a SignalStore, allowing them to be disabled via an injection token.
+
+This feature behaves like `withHooks`, but adds support for disabling hooks — useful for only running
+the hooks for a certain provider, testing or mocking scenarios. Combined with the `createSignalStoreMock`, it
+auto-disables hooks when creating and using the mock store without manually providing the `DISABLE_HOOKS` injection token.
+
+If the `DISABLE_HOOKS` injection token is provided with a truthy value, the hooks will be skipped entirely.
+
+⚠️ **Important Limitation:** Unlike `withHooks`, this feature **only supports the factory function form**.
+Direct hook objects (`{ onInit, onDestroy }`) are **not allowed** and will result in an error.
+
+```ts
+// ✅ Allowed
+withOptionalHooks((store) => ({
+  onInit: () => console.log("Store initialized"),
+  onDestroy: () => console.log("Store destroyed"),
+}));
+
+// ❌ Not allowed (not just because of the console.log...)
+withOptionalHooks({
+  onInit: () => console.log("Store initialized"),
+  onDestroy: () => console.log("Store destroyed"),
+});
+```
+
+### withRootGuard:
+
+Prevents accidental re-provisioning of a root-injected SignalStore in components or feature modules.
+
+This feature is intended to be used with globally provided SignalStores - ({ providedIn: 'root' }).
+When applied, it throws an error if the store is instantiated with any injector other than the root injector.
+
+This helps enforce singleton usage and avoids subtle bugs caused by multiple instances of the same store.
+
+```ts
+return signalStore(
+  { providedIn: "root" },
+  withRootGuard(),
+  withState({
+    count: 1,
+  })
+);
 ```

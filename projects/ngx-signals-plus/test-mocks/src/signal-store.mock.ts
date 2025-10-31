@@ -1,9 +1,11 @@
 import {
+  ApplicationRef,
   InjectionToken,
   Injector,
   NgModule,
   Signal,
   createNgModule,
+  inject,
   isSignal,
   signal,
 } from '@angular/core';
@@ -66,6 +68,8 @@ export type MockMethodOverrides<T> = Partial<{
  * 9. Returns the composite object typed as MockSignalStore<T> (original instance shape minus STATE_SOURCE).
  * 10. Supports additional providers to be injected in the withState factory function in case the withState is resolved
  *     with an injected factory function. You can use the InjectionToken directly or a provider with the useFactory.
+ * 11. Mocks ApplicationRef to return the mocked Injector so that withRootGuard assumes the store is provided in root.
+ * 12. Supports auto-disabling lifecycle hooks when combined with the `withOptionalHooks` feature in the store definition.
  *
  *
  * Why deepComputed?
@@ -77,10 +81,19 @@ export type MockMethodOverrides<T> = Partial<{
  * - MockSelectorOverrides<T>: only non-method keys (selectors/state slices). Use `deepComputed` for complex objects.
  * - MockMethodOverrides<T>: only method keys, each replaced by a provided jasmine or jest mock.
  *
+ * **Important Limitation:**
+ *   When a SignalStore is instantiated, its onInit() lifecycle hook is always executed.
+ *   This means that using withHooks in Signal Stores during testing can trigger unintended side effects.
+ *   To avoid this, use withOptionalHooks instead — it behaves the same as withHooks, but will automatically skip lifecycle hooks.
+ *
  * @example
  * Typical usage:
  * ```typescript
  * const MyStore = signalStore(
+ *   // Optional: lifecycle hooks can be auto-disabled in the mock using withOptionalHooks instead of withHooks
+ *   withOptionalHooks(() => ({
+ *     onInit: () => { ... }
+ *   })),
  *   withState({ status: Status.Initial, error?: { code: number, message: string } }),
  *   withMethods(store => ({update: ...}) )
  * );
@@ -180,6 +193,16 @@ export function createSignalStoreMock<
       providerMap.set(providerEntry.provide, providerEntry);
     }
   }
+
+  // To make sure the withRootGuard assumes the store provided in root, we need to mock ApplicationRef to return the mocked Injector
+  providerMap.set(ApplicationRef, {
+    provide: ApplicationRef,
+    useFactory: () => {
+      return {
+        injector: inject(Injector),
+      };
+    },
+  });
 
   const mockedInjector = Injector.create({ providers: [] });
   mockedInjector.get = (token: unknown): unknown => {

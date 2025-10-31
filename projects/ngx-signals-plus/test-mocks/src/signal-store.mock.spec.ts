@@ -20,6 +20,10 @@ import {
   createSignalStoreMock,
 } from './signal-store.mock';
 import { TestBed } from '@angular/core/testing';
+import {
+  withRootGuard,
+  withOptionalHooks,
+} from '../../signal-store-plus/public-api';
 
 const initialInjectedState = {
   featureString: 'initial',
@@ -87,12 +91,14 @@ describe('createSignalStoreMock', () => {
   });
 
   it('should inherit the initial values', (done) => {
-    const mock = createSignalStoreMock(exampleStore, {
+    const safeExampleStore = createSignalStore(true);
+
+    const mock = createSignalStoreMock(safeExampleStore, {
       providers: [INJECTED_STATE],
     });
-    let storeInstance: InstanceType<typeof exampleStore>;
+    let storeInstance: InstanceType<typeof safeExampleStore>;
     TestBed.runInInjectionContext(() => {
-      storeInstance = new exampleStore();
+      storeInstance = new safeExampleStore();
 
       expect(mock.count()).toBe(storeInstance.count());
       expect(mock.status()).toBe(storeInstance.status());
@@ -323,8 +329,18 @@ describe('createSignalStoreMock', () => {
   });
 });
 
-function createSignalStore() {
+function createSignalStore(preventOnInitThrow = false) {
   return signalStore(
+    { providedIn: 'root' },
+    withRootGuard(),
+    withOptionalHooks(() => ({
+      onInit: () => {
+        inject(TestService); // ensure TestService is injected to test DI in methods
+        if (!preventOnInitThrow) {
+          throw new Error('Should not be called in tests');
+        }
+      },
+    })),
     withState({
       count: 1,
       status: 'idle' as 'idle' | 'loading' | 'ready',
