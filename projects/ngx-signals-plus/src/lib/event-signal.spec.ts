@@ -285,6 +285,7 @@ describe('event-signal.ts', () => {
         nativeElement: secondElement,
       });
 
+      TestBed.tick();
       tick();
 
       const newEvent = new Event(MOCK_EVENT_TYPE);
@@ -321,6 +322,7 @@ describe('event-signal.ts', () => {
         nativeElement: secondElement,
       });
 
+      TestBed.tick();
       tick();
 
       const ignoredEvent = new Event(MOCK_EVENT_TYPE);
@@ -349,6 +351,7 @@ describe('event-signal.ts', () => {
       const anotherEvent = new Event(anotherEventName);
       eventName.set(anotherEventName);
 
+      TestBed.tick();
       tick();
 
       componentNativeElement.dispatchEvent(anotherEvent);
@@ -442,6 +445,7 @@ describe('event-signal.ts', () => {
         nativeElement: secondElement,
       });
 
+      TestBed.tick();
       tick();
 
       const ignoredEvent = new Event(anotherEvent.type);
@@ -489,6 +493,7 @@ describe('event-signal.ts', () => {
         nativeElement: secondElement,
       });
 
+      TestBed.tick();
       tick();
 
       const ignoredEvent = new Event(anotherEvent.type);
@@ -531,6 +536,7 @@ describe('event-signal.ts', () => {
         nativeElement: secondElement,
       });
 
+      TestBed.tick();
       tick();
 
       const ignoredEvent = new Event(anotherEvent.type);

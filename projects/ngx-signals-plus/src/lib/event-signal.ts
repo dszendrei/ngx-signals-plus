@@ -151,7 +151,7 @@ export function signalFromEvent<T extends Event, R = T>(
   };
 
   let activatorAttached = false;
-  let listener: Listener<T> = {
+  const listener: Listener<T> = {
     listening: false,
     target: listenerTarget,
     eventName: eventNameSignal,
@@ -172,7 +172,7 @@ export function signalFromEvent<T extends Event, R = T>(
     }
   };
 
-  let deactivate: () => void = () => {
+  const deactivate: () => void = () => {
     terminateUpdaters();
     removeEventListenerFromTarget(listener);
     activatorAttached = false;
