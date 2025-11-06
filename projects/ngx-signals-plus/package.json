@@ -1,6 +1,6 @@
 {
   "name": "ngx-signals-plus",
-  "version": "0.1.9",
+  "version": "0.1.11",
   "description": "Additional Signals to improve developer experience.",
   "author": "Daniel Szendrei",
   "repository": {

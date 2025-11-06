@@ -6,6 +6,7 @@ import {
   Injector,
   Signal,
   untracked,
+  VERSION,
 } from '@angular/core';
 import { ToObservableOptions } from '@angular/core/rxjs-interop';
 import { Observable, shareReplay, Subject, tap } from 'rxjs';
@@ -61,7 +62,13 @@ export const toBehaviorObservable = <T>(
               untracked(() => subject.error(err));
             }
           },
-          { injector, allowSignalWrites: true, manualCleanup: true }
+          parseInt(VERSION.major) < 19
+            ? {
+                injector,
+                allowSignalWrites: true,
+                manualCleanup: true,
+              }
+            : { injector, manualCleanup: true }
         );
       },
       finalize: () => {

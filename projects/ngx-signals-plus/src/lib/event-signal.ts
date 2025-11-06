@@ -8,6 +8,7 @@ import {
   isSignal,
   signal,
   Signal,
+  VERSION,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Observable, Subscription, throttleTime } from 'rxjs';
@@ -265,10 +266,12 @@ export function signalFromEvent<T extends Event, R = T>(
     } else if (isSignal(activator)) {
       effectRef = effect(
         () => addOrRemoveEventListener(activator(), listener),
-        {
-          injector,
-          allowSignalWrites: true,
-        }
+        parseInt(VERSION.major) < 19
+          ? {
+              injector,
+              allowSignalWrites: true,
+            }
+          : { injector }
       );
     } else {
       subscription = activator.subscribe((activate) =>

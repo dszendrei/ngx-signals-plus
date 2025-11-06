@@ -4,6 +4,7 @@ import {
   EffectRef,
   Injector,
   Signal,
+  VERSION,
   WritableSignal,
   assertNotInReactiveContext,
   effect,
@@ -56,7 +57,7 @@ export function bindable<T>(
 
   let effectRef: EffectRef | undefined = undefined;
   let subscription: Subscription | undefined = undefined;
-  let unbind: () => void = () => {
+  const unbind: () => void = () => {
     if (effectRef !== undefined) {
       effectRef.destroy();
       effectRef = undefined;
@@ -98,10 +99,12 @@ export function bindable<T>(
           const sourceValue = source();
           untracked(() => bindableSignal.set(sourceValue));
         },
-        {
-          injector,
-          allowSignalWrites: true,
-        }
+        parseInt(VERSION.major) < 19
+          ? {
+              injector,
+              allowSignalWrites: true,
+            }
+          : { injector }
       );
     } else {
       let operatorFunction: MonoTypeOperatorFunction<T>;
