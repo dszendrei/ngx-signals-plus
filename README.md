@@ -153,6 +153,7 @@ What it does:
 10. Supports additional providers to be injected in the withState factory function in case the withState is resolved with an injected factory function. You can use the InjectionToken directly or a provider with the useFactory.
 11. Mocks ApplicationRef to return the mocked Injector so that `withRootGuard` assumes the store is provided in root.
 12. Supports auto-disabling lifecycle hooks when combined with the `withOptionalHooks` feature in the store definition.
+13. Supports a `withoutInitialValues` option to skip calling the store constructor entirely (in case the mocked dependencies are causing issues).
 
 Why deepComputed?
 
@@ -165,8 +166,12 @@ Typing details:
 - MockSelectorOverrides<T>: only non-method keys (selectors/state slices). Use `deepComputed` for complex objects.
 - MockMethodOverrides<T>: only method keys, each replaced by a provided jasmine or jest mock.
 
-⚠️ **Important Limitation:**
-When a SignalStore is instantiated, its onInit() lifecycle hook is always executed. This means that using withHooks in Signal Stores during testing can trigger unintended side effects. To avoid this, use withOptionalHooks instead — it behaves the same as withHooks, but will automatically skip lifecycle hooks.
+⚠️ **Important Limitations:**
+
+- When a SignalStore is instantiated, its onInit() lifecycle hook is always executed. This means that using withHooks in Signal Stores during testing can trigger unintended side effects. To avoid this, use withOptionalHooks instead — it behaves the same as withHooks, but will automatically skip lifecycle hooks.
+- When the withComputed method contains dependency injection, the injected service is replaced by an empty object due to the mocked injector. In this case, you have two options:
+  - Mock the service manually and provide it in the providers array of createSignalStoreMock.
+  - Or use the safer withoutInitialValues option, which ensures that the signal store constructor is not called.
 
 Typical usage:
 

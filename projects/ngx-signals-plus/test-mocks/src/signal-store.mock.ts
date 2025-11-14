@@ -70,7 +70,7 @@ export type MockMethodOverrides<T> = Partial<{
  *     with an injected factory function. You can use the InjectionToken directly or a provider with the useFactory.
  * 11. Mocks ApplicationRef to return the mocked Injector so that withRootGuard assumes the store is provided in root.
  * 12. Supports auto-disabling lifecycle hooks when combined with the `withOptionalHooks` feature in the store definition.
- *
+ * 13. Supports a `withoutInitialValues` option to skip calling the store constructor entirely (in case the mocked dependencies are causing issues).
  *
  * Why deepComputed?
  * - It returns a DeepSignal just like the real SignalStore.
@@ -81,10 +81,13 @@ export type MockMethodOverrides<T> = Partial<{
  * - MockSelectorOverrides<T>: only non-method keys (selectors/state slices). Use `deepComputed` for complex objects.
  * - MockMethodOverrides<T>: only method keys, each replaced by a provided jasmine or jest mock.
  *
- * **Important Limitation:**
- *   When a SignalStore is instantiated, its onInit() lifecycle hook is always executed.
+ * **Important Limitations:**
+ * - When a SignalStore is instantiated, its onInit() lifecycle hook is always executed.
  *   This means that using withHooks in Signal Stores during testing can trigger unintended side effects.
  *   To avoid this, use withOptionalHooks instead — it behaves the same as withHooks, but will automatically skip lifecycle hooks.
+ * - When the withComputed method contains dependency injection, the injected service is replaced by an empty object due to the mocked injector. In this case, you have two options:
+ *   Mock the service manually and provide it in the providers array of createSignalStoreMock.
+ *   Or use the safer withoutInitialValues option, which ensures that the signal store constructor is not called.
  *
  * @example
  * Typical usage:
@@ -157,9 +160,43 @@ export function createSignalStoreMock<
       | { provide: unknown; useFactory: (...args: unknown[]) => unknown }
       | InjectionToken<unknown>
     >;
+    withoutInitialValues?: boolean;
   }
 ): MockSignalStore<T> {
   let tempInstance: any;
+
+  if (overrides?.withoutInitialValues) {
+    const mock: any = {};
+
+    tempInstance = new Proxy(mock, {
+      get(target, prop: string) {
+        if (!(prop in target)) {
+          target[prop] = createMethodMock(prop);
+        }
+        return target[prop];
+      },
+      set(target, prop: string, value) {
+        target[prop] = value;
+        return true;
+      },
+    });
+
+    const overrideSelectors = overrides?.overrideSelectors;
+    for (const key in overrideSelectors) {
+      Object.defineProperty(tempInstance, key, {
+        value: overrideSelectors[key as keyof typeof overrideSelectors],
+      });
+    }
+
+    const overrideMethods = overrides?.overrideMethods;
+    for (const key in overrideMethods) {
+      Object.defineProperty(tempInstance, key, {
+        value: overrideMethods[key as keyof typeof overrideMethods],
+      });
+    }
+
+    return tempInstance as MockSignalStore<T>;
+  }
 
   @NgModule()
   class ProxyModule {

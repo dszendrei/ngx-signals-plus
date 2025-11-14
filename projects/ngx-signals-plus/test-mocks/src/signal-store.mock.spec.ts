@@ -125,196 +125,221 @@ describe('createSignalStoreMock', () => {
   });
 
   it('should create jest method mocks if jest is available', () => {
-    try {
-      (globalThis as any).jest = {
-        fn: () => () => {
-          return { _isMockFunction: true };
-        },
-      };
-      const mock = createSignalStoreMock(exampleStore, {
-        providers: [INJECTED_STATE],
-      });
+    const execTest = (withoutInitialValues: boolean) => {
+      try {
+        (globalThis as any).jest = {
+          fn: () => () => {
+            return { _isMockFunction: true };
+          },
+        };
+        const mock = createSignalStoreMock(exampleStore, {
+          providers: [INJECTED_STATE],
+          withoutInitialValues,
+        });
 
-      expect((mock.setStatus as any)()._isMockFunction).toBeTrue();
-      expect((mock.increment as any)()._isMockFunction).toBeTrue();
-    } catch (error) {
-      (globalThis as any).jest = undefined;
-      throw error;
-    }
+        expect((mock.setStatus as any)()._isMockFunction).toBeTrue();
+        expect((mock.increment as any)()._isMockFunction).toBeTrue();
+      } catch (error) {
+        (globalThis as any).jest = undefined;
+        throw error;
+      }
+    };
+
+    execTest(false);
+    execTest(true);
+
     (globalThis as any).jest = undefined;
   });
 
   // local setup is using jasmine for tests
   it('should create jasmine mocks for non-overridden methods', () => {
-    const mock = createSignalStoreMock(exampleStore, {
-      providers: [INJECTED_STATE],
-    });
+    const execTest = (withoutInitialValues: boolean) => {
+      const mock = createSignalStoreMock(exampleStore, {
+        providers: [INJECTED_STATE],
+        withoutInitialValues,
+      });
 
-    mock.setStatus('loading');
-    expect(mock.setStatus).toHaveBeenCalledWith('loading');
-    expect(mock.increment).not.toHaveBeenCalled();
+      mock.setStatus('loading');
+      expect(mock.setStatus).toHaveBeenCalledWith('loading');
+      expect(mock.increment).not.toHaveBeenCalled();
 
-    mock.increment();
-    expect(mock.increment).toHaveBeenCalledTimes(1);
+      mock.increment();
+      expect(mock.increment).toHaveBeenCalledTimes(1);
 
-    // Signal store feature methods
-    mock.setFeatureString('newString');
-    expect(mock.setFeatureString).toHaveBeenCalledWith('newString');
-    expect(mock.incrementFeatureNumber).not.toHaveBeenCalled();
-    mock.incrementFeatureNumber();
-    expect(mock.incrementFeatureNumber).toHaveBeenCalledTimes(1);
+      // Signal store feature methods
+      mock.setFeatureString('newString');
+      expect(mock.setFeatureString).toHaveBeenCalledWith('newString');
+      expect(mock.incrementFeatureNumber).not.toHaveBeenCalled();
+      mock.incrementFeatureNumber();
+      expect(mock.incrementFeatureNumber).toHaveBeenCalledTimes(1);
 
-    // Entity manager store feature methods
-    mock.addEntity(1, 'Entity1');
-    expect(mock.addEntity).toHaveBeenCalledWith(1, 'Entity1');
-    expect(mock.removeEntity).not.toHaveBeenCalled();
-    mock.removeEntity(1);
-    expect(mock.removeEntity).toHaveBeenCalledWith(1);
+      // Entity manager store feature methods
+      mock.addEntity(1, 'Entity1');
+      expect(mock.addEntity).toHaveBeenCalledWith(1, 'Entity1');
+      expect(mock.removeEntity).not.toHaveBeenCalled();
+      mock.removeEntity(1);
+      expect(mock.removeEntity).toHaveBeenCalledWith(1);
+    };
+
+    execTest(false);
+    execTest(true);
   });
 
   it('should allow overriding selectors with signals', () => {
-    const statusOverride = signal<'idle' | 'loading' | 'ready'>('loading');
-    const countOverride = signal(10);
-    const doubleOverride = signal(5);
-    const nestedValueOverride = signal(99);
-    const nestedOverride = deepComputed(() => ({
-      value: nestedValueOverride(),
-    }));
+    const execTest = (withoutInitialValues: boolean) => {
+      const statusOverride = signal<'idle' | 'loading' | 'ready'>('loading');
+      const countOverride = signal(10);
+      const doubleOverride = signal(5);
+      const nestedValueOverride = signal(99);
+      const nestedOverride = deepComputed(() => ({
+        value: nestedValueOverride(),
+      }));
 
-    const featureNumberOverride = signal(42);
-    const featureStringOverride = signal('overridden');
-    const isFeatureNumberPositiveOverride = signal(true);
-    const isFeatureStringEmptyOverride = signal(false);
+      const featureNumberOverride = signal(42);
+      const featureStringOverride = signal('overridden');
+      const isFeatureNumberPositiveOverride = signal(true);
+      const isFeatureStringEmptyOverride = signal(false);
 
-    const entity = { id: 1, text: 'Test Entity', completed: false };
-    const entitiesOverride = signal<
-      Array<{ id: number; text: string; completed: boolean }>
-    >([entity]);
-    const entityMapOverride = signal<{
-      [id: number]: { id: number; text: string; completed: boolean };
-    }>({
-      1: entity,
-    });
+      const entity = { id: 1, text: 'Test Entity', completed: false };
+      const entitiesOverride = signal<
+        Array<{ id: number; text: string; completed: boolean }>
+      >([entity]);
+      const entityMapOverride = signal<{
+        [id: number]: { id: number; text: string; completed: boolean };
+      }>({
+        1: entity,
+      });
 
-    const selectorOverrides: MockSelectorOverrides<
-      MockSignalStore<typeof exampleStore>
-    > = {
-      status: statusOverride,
-      count: countOverride,
-      double: doubleOverride,
-      nested: nestedOverride,
-      featureNumber: featureNumberOverride,
-      featureString: featureStringOverride,
-      isFeatureNumberPositive: isFeatureNumberPositiveOverride,
-      isFeatureStringEmpty: isFeatureStringEmptyOverride,
-      entities: entitiesOverride,
-      entityMap: entityMapOverride,
+      const selectorOverrides: MockSelectorOverrides<
+        MockSignalStore<typeof exampleStore>
+      > = {
+        status: statusOverride,
+        count: countOverride,
+        double: doubleOverride,
+        nested: nestedOverride,
+        featureNumber: featureNumberOverride,
+        featureString: featureStringOverride,
+        isFeatureNumberPositive: isFeatureNumberPositiveOverride,
+        isFeatureStringEmpty: isFeatureStringEmptyOverride,
+        entities: entitiesOverride,
+        entityMap: entityMapOverride,
+      };
+
+      const mock = createSignalStoreMock(exampleStore, {
+        overrideSelectors: selectorOverrides,
+        providers: [INJECTED_STATE],
+        withoutInitialValues,
+      });
+
+      // Identity preserved
+      expect(mock.status()).toBe(statusOverride());
+      expect(mock.count()).toBe(countOverride());
+      expect(mock.double()).toBe(doubleOverride());
+      expect(mock.nested().value).toBe(nestedValueOverride());
+
+      expect(mock.featureNumber()).toBe(featureNumberOverride());
+      expect(mock.featureString()).toBe(featureStringOverride());
+      expect(mock.isFeatureNumberPositive()).toBe(
+        isFeatureNumberPositiveOverride()
+      );
+      expect(mock.isFeatureStringEmpty()).toBe(isFeatureStringEmptyOverride());
+
+      expect(mock.entities()).toBe(entitiesOverride());
+      expect(mock.entityMap()).toBe(entityMapOverride());
+
+      // Reactive updates propagate
+      statusOverride.set('ready');
+      countOverride.set(11);
+      doubleOverride.set(9);
+      nestedValueOverride.set(100);
+
+      featureNumberOverride.set(43);
+      featureStringOverride.set('newString');
+      isFeatureNumberPositiveOverride.set(false);
+      isFeatureStringEmptyOverride.set(true);
+
+      const updatedEntity = { id: 1, text: 'Updated Entity', completed: true };
+      entitiesOverride.set([updatedEntity]);
+      entityMapOverride.set({ 1: updatedEntity });
+
+      expect(mock.status()).toBe('ready');
+      expect(mock.count()).toBe(11);
+      expect(mock.double()).toBe(9);
+      expect(mock.nested().value).toBe(100);
+
+      expect(mock.featureNumber()).toBe(43);
+      expect(mock.featureString()).toBe('newString');
+      expect(mock.isFeatureNumberPositive()).toBe(false);
+      expect(mock.isFeatureStringEmpty()).toBe(true);
+
+      expect(mock.entities()).toEqual([updatedEntity]);
+      expect(mock.entityMap()).toEqual({ 1: updatedEntity });
     };
 
-    const mock = createSignalStoreMock(exampleStore, {
-      overrideSelectors: selectorOverrides,
-      providers: [INJECTED_STATE],
-    });
-
-    // Identity preserved
-    expect(mock.status()).toBe(statusOverride());
-    expect(mock.count()).toBe(countOverride());
-    expect(mock.double()).toBe(doubleOverride());
-    expect(mock.nested().value).toBe(nestedValueOverride());
-
-    expect(mock.featureNumber()).toBe(featureNumberOverride());
-    expect(mock.featureString()).toBe(featureStringOverride());
-    expect(mock.isFeatureNumberPositive()).toBe(
-      isFeatureNumberPositiveOverride()
-    );
-    expect(mock.isFeatureStringEmpty()).toBe(isFeatureStringEmptyOverride());
-
-    expect(mock.entities()).toBe(entitiesOverride());
-    expect(mock.entityMap()).toBe(entityMapOverride());
-
-    // Reactive updates propagate
-    statusOverride.set('ready');
-    countOverride.set(11);
-    doubleOverride.set(9);
-    nestedValueOverride.set(100);
-
-    featureNumberOverride.set(43);
-    featureStringOverride.set('newString');
-    isFeatureNumberPositiveOverride.set(false);
-    isFeatureStringEmptyOverride.set(true);
-
-    const updatedEntity = { id: 1, text: 'Updated Entity', completed: true };
-    entitiesOverride.set([updatedEntity]);
-    entityMapOverride.set({ 1: updatedEntity });
-
-    expect(mock.status()).toBe('ready');
-    expect(mock.count()).toBe(11);
-    expect(mock.double()).toBe(9);
-    expect(mock.nested().value).toBe(100);
-
-    expect(mock.featureNumber()).toBe(43);
-    expect(mock.featureString()).toBe('newString');
-    expect(mock.isFeatureNumberPositive()).toBe(false);
-    expect(mock.isFeatureStringEmpty()).toBe(true);
-
-    expect(mock.entities()).toEqual([updatedEntity]);
-    expect(mock.entityMap()).toEqual({ 1: updatedEntity });
+    execTest(false);
+    execTest(true);
   });
 
   it('should override methods with provided mocks', () => {
-    let incrementCalls = 0;
-    const incrementOverride = () => {
-      incrementCalls++;
-    };
-    let status = '';
-    const setStatusOverride = (s: string) => {
-      status = s;
-    };
-    let featureString = '';
-    const setFeatureStringOverride = (s: string) => {
-      featureString = s;
-    };
-    let incrementFeatureNumberCalls = 0;
-    const incrementFeatureNumberOverride = () => {
-      incrementFeatureNumberCalls++;
-    };
-    let entity = { id: 0, name: '' };
-    const addEntityOverride = (id: number, name: string) => {
-      entity.id = id;
-      entity.name = name;
-    };
-    let removedEntityId = 0;
-    const removeEntityOverride = (id: number) => {
-      removedEntityId = id;
-    };
-    const mock = createSignalStoreMock(exampleStore, {
-      overrideMethods: {
-        increment: incrementOverride,
-        setStatus: setStatusOverride,
-        setFeatureString: setFeatureStringOverride,
-        incrementFeatureNumber: incrementFeatureNumberOverride,
-        addEntity: addEntityOverride,
-        removeEntity: removeEntityOverride,
-      },
-      providers: [INJECTED_STATE],
-    });
+    const execTest = (withoutInitialValues: boolean) => {
+      let incrementCalls = 0;
+      const incrementOverride = () => {
+        incrementCalls++;
+      };
+      let status = '';
+      const setStatusOverride = (s: string) => {
+        status = s;
+      };
+      let featureString = '';
+      const setFeatureStringOverride = (s: string) => {
+        featureString = s;
+      };
+      let incrementFeatureNumberCalls = 0;
+      const incrementFeatureNumberOverride = () => {
+        incrementFeatureNumberCalls++;
+      };
+      let entity = { id: 0, name: '' };
+      const addEntityOverride = (id: number, name: string) => {
+        entity.id = id;
+        entity.name = name;
+      };
+      let removedEntityId = 0;
+      const removeEntityOverride = (id: number) => {
+        removedEntityId = id;
+      };
+      const mock = createSignalStoreMock(exampleStore, {
+        overrideMethods: {
+          increment: incrementOverride,
+          setStatus: setStatusOverride,
+          setFeatureString: setFeatureStringOverride,
+          incrementFeatureNumber: incrementFeatureNumberOverride,
+          addEntity: addEntityOverride,
+          removeEntity: removeEntityOverride,
+        },
+        providers: [INJECTED_STATE],
+        withoutInitialValues,
+      });
 
-    mock.setStatus('loading');
-    expect(status).toBe('loading');
-    mock.increment();
-    expect(incrementCalls).toBe(1);
+      mock.setStatus('loading');
+      expect(status).toBe('loading');
+      mock.increment();
+      expect(incrementCalls).toBe(1);
 
-    // Signal store feature methods
-    mock.setFeatureString('feature');
-    expect(featureString).toBe('feature');
-    mock.incrementFeatureNumber();
-    expect(incrementFeatureNumberCalls).toBe(1);
+      // Signal store feature methods
+      mock.setFeatureString('feature');
+      expect(featureString).toBe('feature');
+      mock.incrementFeatureNumber();
+      expect(incrementFeatureNumberCalls).toBe(1);
 
-    // Entity manager store feature methods
-    mock.addEntity(2, 'Entity2');
-    expect(entity).toEqual({ id: 2, name: 'Entity2' });
-    mock.removeEntity(2);
-    expect(removedEntityId).toBe(2);
+      // Entity manager store feature methods
+      mock.addEntity(2, 'Entity2');
+      expect(entity).toEqual({ id: 2, name: 'Entity2' });
+      mock.removeEntity(2);
+      expect(removedEntityId).toBe(2);
+    };
+
+    execTest(false);
+    execTest(true);
   });
 
   it('should reflect signal updates after resubscription-like reads', () => {
