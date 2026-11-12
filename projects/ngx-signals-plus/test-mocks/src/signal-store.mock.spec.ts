@@ -44,13 +44,43 @@ class TestService {
   }
 }
 
+type FakeMockLibrary = {
+  fn: () => () => void;
+  createdMocks: Array<() => void>;
+};
+
+const testRunnerGlobals: typeof globalThis & {
+  vi?: FakeMockLibrary;
+  jest?: FakeMockLibrary;
+} = globalThis;
+
+function createFakeMockLibrary(): FakeMockLibrary {
+  const createdMocks: Array<() => void> = [];
+  return {
+    createdMocks,
+    fn: () => {
+      const mockFn = () => {};
+      createdMocks.push(mockFn);
+      return mockFn;
+    },
+  };
+}
+
 describe('createSignalStoreMock', () => {
   let exampleStore: ReturnType<typeof createSignalStore>;
 
+  const resetTestRunnerGlobals = () => {
+    testRunnerGlobals.vi = undefined;
+    testRunnerGlobals.jest = undefined;
+  };
+
   beforeEach(() => {
+    resetTestRunnerGlobals();
     // Build a real signal store class with state, computed selectors and methods
     exampleStore = createSignalStore();
   });
+
+  afterEach(resetTestRunnerGlobals);
 
   it('should expose same selector and method keys (minus STATE_SOURCE symbol)', () => {
     const mock = createSignalStoreMock(exampleStore, {
@@ -126,29 +156,99 @@ describe('createSignalStoreMock', () => {
 
   it('should create jest method mocks if jest is available', () => {
     const execTest = (withoutInitialValues: boolean) => {
-      try {
-        (globalThis as any).jest = {
-          fn: () => () => {
-            return { _isMockFunction: true };
-          },
-        };
-        const mock = createSignalStoreMock(exampleStore, {
-          providers: [INJECTED_STATE],
-          withoutInitialValues,
-        });
+      const jest = createFakeMockLibrary();
+      testRunnerGlobals.jest = jest;
+      const mock = createSignalStoreMock(exampleStore, {
+        providers: [INJECTED_STATE],
+        withoutInitialValues,
+      });
 
-        expect((mock.setStatus as any)()._isMockFunction).toBeTrue();
-        expect((mock.increment as any)()._isMockFunction).toBeTrue();
-      } catch (error) {
-        (globalThis as any).jest = undefined;
-        throw error;
-      }
+      expect(jest.createdMocks).toContain(mock.setStatus);
+      expect(jest.createdMocks).toContain(mock.increment);
     };
 
     execTest(false);
     execTest(true);
+  });
 
-    (globalThis as any).jest = undefined;
+  it('should create vitest method mocks if vitest globals are available', () => {
+    const execTest = (withoutInitialValues: boolean) => {
+      const vi = createFakeMockLibrary();
+      testRunnerGlobals.vi = vi;
+      const mock = createSignalStoreMock(exampleStore, {
+        providers: [INJECTED_STATE],
+        withoutInitialValues,
+      });
+
+      expect(vi.createdMocks).toContain(mock.setStatus);
+      expect(vi.createdMocks).toContain(mock.increment);
+    };
+
+    execTest(false);
+    execTest(true);
+  });
+
+  it('should prioritize vitest over jest when both globals are available', () => {
+    const execTest = (withoutInitialValues: boolean) => {
+      const vi = createFakeMockLibrary();
+      const jest = createFakeMockLibrary();
+      testRunnerGlobals.vi = vi;
+      testRunnerGlobals.jest = jest;
+      const mock = createSignalStoreMock(exampleStore, {
+        providers: [INJECTED_STATE],
+        withoutInitialValues,
+      });
+
+      expect(vi.createdMocks).toContain(mock.setStatus);
+      expect(jest.createdMocks).toEqual([]);
+    };
+
+    execTest(false);
+    execTest(true);
+  });
+
+  it('should use the provided methodMockFactory for non-overridden methods', () => {
+    const execTest = (withoutInitialValues: boolean) => {
+      const factoryMocks = new Map<string, jasmine.Spy>();
+      const methodMockFactory = jasmine
+        .createSpy('methodMockFactory')
+        .and.callFake((name: string) => {
+          const spy = jasmine.createSpy(name);
+          factoryMocks.set(name, spy);
+          return spy;
+        });
+      const increment = jasmine.createSpy('increment');
+
+      const mock = createSignalStoreMock(exampleStore, {
+        providers: [INJECTED_STATE],
+        overrideMethods: { increment },
+        withoutInitialValues,
+        methodMockFactory,
+      });
+
+      expect(mock.increment).toBe(increment);
+      expect(mock.setStatus).toBe(factoryMocks.get('setStatus'));
+      expect(methodMockFactory).toHaveBeenCalledWith('setStatus');
+      expect(methodMockFactory).not.toHaveBeenCalledWith('increment');
+    };
+
+    execTest(false);
+    execTest(true);
+  });
+
+  it('should pass symbol property names as strings to the methodMockFactory', () => {
+    const methodMockFactory = jasmine
+      .createSpy('methodMockFactory')
+      .and.callFake(() => () => {});
+
+    const mock = createSignalStoreMock(exampleStore, {
+      providers: [INJECTED_STATE],
+      withoutInitialValues: true,
+      methodMockFactory,
+    });
+    Reflect.get(mock, Symbol.iterator);
+
+    expect(methodMockFactory).toHaveBeenCalledWith('Symbol(Symbol.iterator)');
   });
 
   // local setup is using jasmine for tests
