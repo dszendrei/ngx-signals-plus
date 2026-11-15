@@ -1,6 +1,6 @@
 import { DestroyRef, Injector, signal } from '@angular/core';
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { BehaviorSubject, Subject, take, takeUntil } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, take, takeUntil } from 'rxjs';
 import { bindable } from './bindable-signal';
 
 describe('bindable-signal.ts', () => {
@@ -9,7 +9,7 @@ describe('bindable-signal.ts', () => {
       const newValue = 'newValue';
       const updaterSource = new BehaviorSubject(newValue);
       const bindableSignal = TestBed.runInInjectionContext(() =>
-        bindable('initialValue')
+        bindable('initialValue'),
       );
 
       bindableSignal.bindTo(updaterSource);
@@ -26,7 +26,7 @@ describe('bindable-signal.ts', () => {
       const newValue = 'newValue';
       const updaterSignal = signal(newValue);
       const bindableSignal = TestBed.runInInjectionContext(() =>
-        bindable('initialValue')
+        bindable('initialValue'),
       );
 
       bindableSignal.bindTo(updaterSignal);
@@ -69,7 +69,7 @@ describe('bindable-signal.ts', () => {
       const injector = TestBed.inject(Injector);
 
       expect(() =>
-        bindable('initialValue', { manualCleanup: true, injector })
+        bindable('initialValue', { manualCleanup: true, injector }),
       ).toThrow();
     });
 
@@ -77,13 +77,13 @@ describe('bindable-signal.ts', () => {
       const destroyRef = TestBed.inject(DestroyRef);
 
       expect(() =>
-        bindable('initialValue', { manualCleanup: true, destroyRef })
+        bindable('initialValue', { manualCleanup: true, destroyRef }),
       ).toThrow();
     });
 
     it('bindTo should throw if manualCleanup is true and it is binding to a signal', () => {
       const bindableSignal = TestBed.runInInjectionContext(() =>
-        bindable('initialValue', { manualCleanup: true })
+        bindable('initialValue', { manualCleanup: true }),
       );
 
       expect(() => bindableSignal.bindTo(signal('newValue'))).toThrow();
@@ -92,7 +92,7 @@ describe('bindable-signal.ts', () => {
     it('bindTo should throw if destroyRef provided and it is binding to a signal', () => {
       const destroyRef = TestBed.inject(DestroyRef);
       const bindableSignal = TestBed.runInInjectionContext(() =>
-        bindable('initialValue', { destroyRef })
+        bindable('initialValue', { destroyRef }),
       );
 
       expect(() => bindableSignal.bindTo(signal('newValue'))).toThrow();
@@ -164,6 +164,68 @@ describe('bindable-signal.ts', () => {
       expect(bindableSignal()).toBe(newValue);
     });
 
+    it('should release a synchronously completed observable and allow rebinding', () => {
+      const teardown = jasmine.createSpy('teardown');
+      const bindableSignal = bindable('initialValue', { manualCleanup: true });
+      const completedSource = new Observable<string>((subscriber) => {
+        subscriber.next('completedValue');
+        subscriber.complete();
+        return teardown;
+      });
+
+      bindableSignal.bindTo(completedSource);
+
+      expect(bindableSignal()).toBe('completedValue');
+      expect(teardown).toHaveBeenCalledTimes(1);
+
+      const nextSource = new BehaviorSubject('nextValue');
+      expect(() => bindableSignal.bindTo(nextSource)).not.toThrow();
+      expect(bindableSignal()).toBe('nextValue');
+      bindableSignal.unbind();
+    });
+
+    it('should unsubscribe if unbind() is called before subscribe() returns', () => {
+      const teardown = jasmine.createSpy('teardown');
+      const bindableSignal = bindable('initialValue', { manualCleanup: true });
+      const source = new Observable<string>(() => {
+        bindableSignal.unbind();
+        return teardown;
+      });
+
+      bindableSignal.bindTo(source);
+
+      expect(teardown).toHaveBeenCalledTimes(1);
+
+      const nextSource = new BehaviorSubject('nextValue');
+      bindableSignal.bindTo(nextSource);
+      expect(bindableSignal()).toBe('nextValue');
+      bindableSignal.unbind();
+    });
+
+    it('should keep a reentrant binding when an earlier subscribe() returns afterward', () => {
+      const oldTeardown = jasmine.createSpy('oldTeardown');
+      const newTeardown = jasmine.createSpy('newTeardown');
+      const bindableSignal = bindable('initialValue', { manualCleanup: true });
+      const newSource = new Observable<string>((subscriber) => {
+        subscriber.next('newValue');
+        return newTeardown;
+      });
+      const oldSource = new Observable<string>(() => {
+        bindableSignal.unbind();
+        bindableSignal.bindTo(newSource);
+        return oldTeardown;
+      });
+
+      bindableSignal.bindTo(oldSource);
+
+      expect(bindableSignal()).toBe('newValue');
+      expect(oldTeardown).toHaveBeenCalledTimes(1);
+      expect(newTeardown).not.toHaveBeenCalled();
+
+      bindableSignal.unbind();
+      expect(newTeardown).toHaveBeenCalledTimes(1);
+    });
+
     it('should stop updating the bindable signal from a signal if the injected DestroyRef onDestroy callback was called', fakeAsync(() => {
       const injector = TestBed.inject(Injector);
       const destroyRef = TestBed.inject(DestroyRef);
@@ -190,7 +252,7 @@ describe('bindable-signal.ts', () => {
       const newValue = 'newValue';
       const updaterSource = new BehaviorSubject(newValue);
       const bindableSignal = TestBed.runInInjectionContext(() =>
-        bindable('initialValue')
+        bindable('initialValue'),
       );
 
       bindableSignal.bindTo(updaterSource);
@@ -208,7 +270,7 @@ describe('bindable-signal.ts', () => {
       const newValue = 'newValue';
       const upadterSignal = signal(newValue);
       const bindableSignal = TestBed.runInInjectionContext(() =>
-        bindable('initialValue')
+        bindable('initialValue'),
       );
 
       bindableSignal.bindTo(upadterSignal);
@@ -224,19 +286,11 @@ describe('bindable-signal.ts', () => {
       expect(bindableSignal()).toBe(newValue);
     }));
 
-    it('should throw if unbind() on bindable signal was called before it was bound to an Observable or Signal', () => {
-      const bindableSignal = TestBed.runInInjectionContext(() =>
-        bindable('initialValue')
-      );
-
-      expect(() => bindableSignal.unbind()).toThrow();
-    });
-
     it('should only update from the latest bound observable', () => {
       const newValue = 'newValue';
       const updaterSource = new BehaviorSubject(newValue);
       const bindableSignal = TestBed.runInInjectionContext(() =>
-        bindable('initialValue')
+        bindable('initialValue'),
       );
 
       bindableSignal.bindTo(updaterSource);
@@ -265,7 +319,7 @@ describe('bindable-signal.ts', () => {
       const newValue = 'newValue';
       const updaterSignal = signal(newValue);
       const bindableSignal = TestBed.runInInjectionContext(() =>
-        bindable('initialValue')
+        bindable('initialValue'),
       );
 
       bindableSignal.bindTo(updaterSignal);
@@ -298,7 +352,7 @@ describe('bindable-signal.ts', () => {
       const newValue = 'newValue';
       const updaterSource = new BehaviorSubject(newValue);
       const bindableSignal = TestBed.runInInjectionContext(() =>
-        bindable('initialValue')
+        bindable('initialValue'),
       );
 
       bindableSignal.bindTo(updaterSource);
@@ -324,7 +378,7 @@ describe('bindable-signal.ts', () => {
       const newValue = 'newValue';
       const updaterSignal = signal(newValue);
       const bindableSignal = TestBed.runInInjectionContext(() =>
-        bindable('initialValue')
+        bindable('initialValue'),
       );
 
       bindableSignal.bindTo(updaterSignal);
@@ -383,7 +437,7 @@ describe('bindable-signal.ts', () => {
 
 function collectMockDestroyRefCallbacks(
   mockDestroyRef: DestroyRef,
-  onDestroyHooks: (() => void)[]
+  onDestroyHooks: (() => void)[],
 ) {
   spyOn(mockDestroyRef, 'onDestroy').and.callFake((fn) => {
     onDestroyHooks.push(fn);

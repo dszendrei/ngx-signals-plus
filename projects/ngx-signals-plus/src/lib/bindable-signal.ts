@@ -14,7 +14,13 @@ import {
   untracked,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { MonoTypeOperatorFunction, Observable, Subscription, pipe } from 'rxjs';
+import {
+  MonoTypeOperatorFunction,
+  Observable,
+  Subscription,
+  finalize,
+  pipe,
+} from 'rxjs';
 
 export type BindableSignal<T> = WritableSignal<T> & {
   bindTo: (source: Observable<T> | Signal<T>) => WritableSignal<T>;
@@ -43,7 +49,7 @@ export function bindable<T>(
     destroyRef?: DestroyRef;
     injector?: Injector;
     manualCleanup?: boolean;
-  }
+  },
 ): BindableSignal<T> {
   assertNoDestroyRefOrInjectorProvidedWithManualCleanup(options);
 
@@ -54,43 +60,43 @@ export function bindable<T>(
 
   const bindableSignal = signal<T>(initialValue, options);
   let bound = false;
+  let activeBinding: object | undefined = undefined;
 
   let effectRef: EffectRef | undefined = undefined;
   let subscription: Subscription | undefined = undefined;
   const unbind: () => void = () => {
-    if (effectRef !== undefined) {
-      effectRef.destroy();
-      effectRef = undefined;
-    } else if (subscription !== undefined) {
-      subscription.unsubscribe();
-      subscription = undefined;
-    } else {
-      throw new Error(
-        'Unbind was called before the BindableSignal was bound to an Observable or Signal!'
-      );
-    }
+    const currentEffect = effectRef;
+    const currentSubscription = subscription;
+
+    effectRef = undefined;
+    subscription = undefined;
     bound = false;
+    activeBinding = undefined;
+
+    currentEffect?.destroy();
+    currentSubscription?.unsubscribe();
   };
 
   const bindTo: (source: Observable<T> | Signal<T>) => WritableSignal<T> = (
-    source: Observable<T> | Signal<T>
+    source: Observable<T> | Signal<T>,
   ) => {
     assertNotInReactiveContext(
       bindTo,
       'Invoking `bindTo` causes new subscriptions every time. ' +
-        'Consider moving `bindTo` outside of the reactive context and read the signal value where needed.'
+        'Consider moving `bindTo` outside of the reactive context and read the signal value where needed.',
     );
     if (bound) {
       throw new Error(
-        'Signal is already bound to an observable. Call unbind() before binding it again.'
+        'Signal is already bound to an observable. Call unbind() before binding it again.',
       );
     }
+
     if (isSignal(source)) {
       if (injector === undefined) {
         throw new Error(
           'Tried to bind the signal to a signal without a provided Injector. In this case the bindTo method is creating an effect and there is no ' +
             'possibility to provide a terminator operator unlike with observables. To prevent memory leaks the Injector has to be provided or the ' +
-            'bindable() factory method needs to be called in injection context. Providing the DestroyRef will make the Injector undefined.'
+            'bindable() factory method needs to be called in injection context. Providing the DestroyRef will make the Injector undefined.',
         );
       }
 
@@ -104,8 +110,10 @@ export function bindable<T>(
               injector,
               allowSignalWrites: true,
             }
-          : { injector }
+          : { injector },
       );
+
+      bound = true;
     } else {
       let operatorFunction: MonoTypeOperatorFunction<T>;
       if (options?.manualCleanup === true) {
@@ -115,17 +123,35 @@ export function bindable<T>(
         if (destroyRef === undefined) {
           throw new Error(
             'Using the bindable() factory function in injection context or prodiving the DestroyRef ' +
-              'or the Injector is required when not using manual cleanup to prevent memory leaks.'
+              'or the Injector is required when not using manual cleanup to prevent memory leaks.',
           );
         }
         operatorFunction = takeUntilDestroyed(destroyRef);
       }
 
-      subscription = source
-        .pipe(operatorFunction)
+      const token = {};
+      activeBinding = token;
+      bound = true;
+
+      const newSubscription = source
+        .pipe(
+          finalize(() => {
+            if (activeBinding === token) {
+              unbind();
+            }
+          }),
+          operatorFunction,
+        )
         .subscribe((value) => bindableSignal.set(value));
+
+      if (!newSubscription.closed) {
+        if (bound && activeBinding === token) {
+          subscription = newSubscription;
+        } else {
+          newSubscription.unsubscribe();
+        }
+      }
     }
-    bound = true;
     return bindableSignal;
   };
 
@@ -141,7 +167,7 @@ function assertNoDestroyRefOrInjectorProvidedWithManualCleanup(options?: {
     if (options?.destroyRef !== undefined || options?.injector !== undefined) {
       throw new Error(
         'When using manual cleanup, DestroyRef or Injector will not provide automated cleanup. ' +
-          'Make sure that the operator functions contain the take or takeUntil operator to prevent memory leaks.'
+          'Make sure that the operator functions contain the take or takeUntil operator to prevent memory leaks.',
       );
     }
   }
