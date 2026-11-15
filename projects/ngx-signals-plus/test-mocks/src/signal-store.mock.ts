@@ -9,17 +9,29 @@ import {
   isSignal,
   signal,
 } from '@angular/core';
-import { deepComputed, getState } from '@ngrx/signals';
-import { STATE_SOURCE } from '@ngrx/signals/src/state-source';
+import { StateSource, deepComputed, getState } from '@ngrx/signals';
+
+/**
+ * The type of the (non-public) STATE_SOURCE symbol, derived from the public StateSource type.
+ * Avoids deep imports into @ngrx/signals, which are not resolvable in newer versions
+ * (package exports / bundled typings) nor with `moduleResolution: "bundler"`.
+ */
+type StateSourceKey = keyof StateSource<object>;
 
 /**
  * A utility type to create a mock of a SignalStore for testing purposes.
  * Has the same representations as the real store, except the STATE_SOURCE symbol is removed.
  */
 export type MockSignalStore<T extends new (...args: unknown[]) => unknown> =
-  Omit<InstanceType<T>, typeof STATE_SOURCE>;
+  Omit<InstanceType<T>, StateSourceKey>;
 
 type AnyFn = (...args: any[]) => unknown;
+
+/**
+ * A factory creating the mock for a non-overridden store method, e.g. `() => vi.fn()`.
+ * Receives the name of the mocked method.
+ */
+export type MethodMockFactory = (methodName: string) => AnyFn;
 
 type MethodKeys<T> = {
   [K in keyof T]: T[K] extends AnyFn
@@ -63,8 +75,9 @@ export type MockMethodOverrides<T> = Partial<{
  *    This keeps dependency tracking so updates propagate.
  * 7. Attaches method overrides (overrideMethods) as supplied mock instances to mock the withMethods functions.
  * 8. Auto-mocks any remaining functions (that are not signals).
- *    - Detects availability of jest.fn() or jasmine.createSpy().
- *    - If neither is available, creates a stub: (...args: any[]) => {};.
+ *    - Uses the `methodMockFactory` option if provided (e.g. `() => vi.fn()`).
+ *    - Otherwise detects availability of (in order of priority) vi.fn() (Vitest with `globals: true`), jest.fn() or jasmine.createSpy().
+ *    - If none is available, creates a no-op stub: () => {}.
  * 9. Returns the composite object typed as MockSignalStore<T> (original instance shape minus STATE_SOURCE).
  * 10. Supports additional providers to be injected in the withState factory function in case the withState is resolved
  *     with an injected factory function. You can use the InjectionToken directly or a provider with the useFactory.
@@ -79,7 +92,7 @@ export type MockMethodOverrides<T> = Partial<{
  *
  * Typing details:
  * - MockSelectorOverrides<T>: only non-method keys (selectors/state slices). Use `deepComputed` for complex objects.
- * - MockMethodOverrides<T>: only method keys, each replaced by a provided jasmine or jest mock.
+ * - MockMethodOverrides<T>: only method keys, each replaced by a provided jasmine, jest or vitest mock.
  *
  * **Important Limitations:**
  * - When a SignalStore is instantiated, its onInit() lifecycle hook is always executed.
@@ -103,7 +116,7 @@ export type MockMethodOverrides<T> = Partial<{
  *
  * const status = signal(Status.Initial);
  * const error = signal<{ code: number; message: string } | undefined>(undefined);
- * const update = **jest or jasmine spy**;
+ * const update = **jest, vitest or jasmine spy**;
  *
  * const store = createSignalStoreMock(MyStore, {
  *   overrideSelectors: { status, deepComputed(error) },
@@ -144,6 +157,15 @@ export type MockMethodOverrides<T> = Partial<{
  * });
  * ```
  *
+ * ### Using an explicit method mock factory (e.g. Vitest without `globals: true`):
+ * ```typescript
+ * import { vi } from 'vitest';
+ *
+ * const mock = createSignalStoreMock(MyStore, {
+ *   methodMockFactory: () => vi.fn(),
+ * });
+ * ```
+ *
  * @typeParam T - The constructor type of the store being mocked.
  * @param storeConstructor The concrete SignalStore class to mock.
  * @param overrides Optional selector and/or method and/or providers overrides.
@@ -161,17 +183,19 @@ export function createSignalStoreMock<
       | InjectionToken<unknown>
     >;
     withoutInitialValues?: boolean;
+    methodMockFactory?: MethodMockFactory;
   }
 ): MockSignalStore<T> {
+  const methodMockFactory = overrides?.methodMockFactory;
   let tempInstance: any;
 
   if (overrides?.withoutInitialValues) {
     const mock: any = {};
 
     tempInstance = new Proxy(mock, {
-      get(target, prop: string) {
+      get(target, prop: string | symbol) {
         if (!(prop in target)) {
-          target[prop] = createMethodMock(prop);
+          target[prop] = createMethodMock(String(prop), methodMockFactory);
         }
         return target[prop];
       },
@@ -318,7 +342,7 @@ export function createSignalStoreMock<
       });
     } else if (typeof value === 'function' && !isSignal(value)) {
       Object.defineProperty(deepSignal, key, {
-        value: createMethodMock(key),
+        value: createMethodMock(key, methodMockFactory),
         writable: true,
         enumerable: true,
       });
@@ -327,29 +351,42 @@ export function createSignalStoreMock<
   return deepSignal as unknown as MockSignalStore<T>;
 }
 
-function createMethodMock(key: string) {
-  // Create a usable mock for methods. Prefer Jest or Jasmine spies if available
+/**
+ * The (optional) globals exposed by the supported test runners.
+ */
+type TestRunnerGlobals = {
+  vi?: { fn?: unknown };
+  jest?: { fn?: unknown };
+  jasmine?: { createSpy?: unknown };
+};
+
+function createMethodMock(
+  key: string,
+  methodMockFactory?: MethodMockFactory
+): AnyFn {
+  if (methodMockFactory) {
+    return methodMockFactory(key);
+  }
+  // Create a usable mock for methods. Prefer Vitest, Jest or Jasmine spies if available
   // so consumers can use spy assertions directly. Fall back to a no-op function.
-  let methodMock: any;
+  const { vi, jest, jasmine }: typeof globalThis & TestRunnerGlobals =
+    globalThis;
   try {
+    // Vitest exposes a `vi` global with `fn` when `globals: true` (default in Angular's unit-test builder).
+    if (typeof vi?.fn === 'function') {
+      return vi.fn();
+    }
     // Jest exposes a `jest` global with `fn`.
-    if (
-      typeof (globalThis as any).jest === 'object' &&
-      typeof (globalThis as any).jest.fn === 'function'
-    ) {
-      methodMock = (globalThis as any).jest.fn();
-    } else if (
-      typeof (globalThis as any).jasmine === 'object' &&
-      typeof (globalThis as any).jasmine.createSpy === 'function'
-    ) {
-      // Jasmine provides jasmine.createSpy(name)
-      methodMock = (globalThis as any).jasmine.createSpy(String(key));
-    } else {
-      // Last resort: return a simple function that can be spied on later
-      methodMock = (..._args: any[]) => {};
+    if (typeof jest?.fn === 'function') {
+      return jest.fn();
+    }
+    // Jasmine provides jasmine.createSpy(name)
+    if (typeof jasmine?.createSpy === 'function') {
+      return jasmine.createSpy(key);
     }
   } catch {
-    methodMock = (..._args: any[]) => {};
+    // Fall through to the no-op function
   }
-  return methodMock;
+  // Last resort: return a simple function that can be spied on later
+  return () => {};
 }

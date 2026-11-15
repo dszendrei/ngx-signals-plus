@@ -147,8 +147,9 @@ What it does:
     This keeps dependency tracking so updates propagate.
 7.  Attaches method overrides (overrideMethods) as supplied mock instances to mock the withMethods functions.
 8.  Auto-mocks any remaining functions (that are not signals).
-    - Detects availability of jest.fn() or jasmine.createSpy().
-    - If neither is available, creates a stub: (...args: any[]) => {};.
+    - Uses the `methodMockFactory` option if provided (e.g. `() => vi.fn()`).
+    - Otherwise detects availability of (in order of priority) vi.fn() (Vitest with `globals: true`), jest.fn() or jasmine.createSpy().
+    - If none is available, creates a no-op stub: () => {}.
 9.  Returns the composite object typed as MockSignalStore<T> (original instance shape minus STATE_SOURCE).
 10. Supports additional providers to be injected in the withState factory function in case the withState is resolved with an injected factory function. You can use the InjectionToken directly or a provider with the useFactory.
 11. Mocks ApplicationRef to return the mocked Injector so that `withRootGuard` assumes the store is provided in root.
@@ -164,7 +165,7 @@ Why deepComputed?
 Typing details:
 
 - MockSelectorOverrides<T>: only non-method keys (selectors/state slices). Use `deepComputed` for complex objects.
-- MockMethodOverrides<T>: only method keys, each replaced by a provided jasmine or jest mock.
+- MockMethodOverrides<T>: only method keys, each replaced by a provided jasmine, jest or vitest mock.
 
 ⚠️ **Important Limitations:**
 
@@ -187,7 +188,7 @@ const MyStore = signalStore(
 
 const status = signal(Status.Initial);
 const error = signal<{ code: number; message: string } | undefined>(undefined);
-const update = **jest or jasmine spy**;
+const update = **jest, vitest or jasmine spy**;
 
 const store = createSignalStoreMock(MyStore, {
   overrideSelectors: { status, deepComputed(error) },
@@ -232,6 +233,22 @@ const mockB = createSignalStoreMock(MyStore, {
     },
   ],
 });
+```
+
+Using Vitest (e.g. Angular's `@angular/build:unit-test` builder):
+
+- With `globals: true` (the default of Angular's unit-test builder), non-overridden methods are automatically mocked with `vi.fn()`.
+- Without Vitest globals, pass a `methodMockFactory` (also usable to customize the mocks for any other test runner):
+
+```ts
+import { vi } from 'vitest';
+
+const store = createSignalStoreMock(MyStore, {
+  methodMockFactory: () => vi.fn(),
+});
+
+store.update();
+expect(store.update).toHaveBeenCalled();
 ```
 
 ### withOptionalHooks:
